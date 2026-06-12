@@ -43,47 +43,33 @@ verdictLabel must be one of: "Undervalued", "Overvalued", "Fairly valued".
 newsSentimentLabel must be one of: "Bullish", "Bearish", "Neutral".
 All prices in USD as numbers. Be realistic and grounded in the actual data provided.`;
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const isOAuthKey = apiKey && apiKey.startsWith("AQ.");
-
-  let response;
-  if (isOAuthKey) {
-    response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+  try {
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "HTTP-Referer": "https://stock-dashboard.vercel.app",
+          "X-Title": "Stock Analysis Dashboard",
         },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
+          model: "meta-llama/llama-3.3-70b-instruct:free",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.3,
+          max_tokens: 1500,
         }),
       }
     );
-  } else {
-    response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
-        }),
-      }
-    );
-  }
 
-  try {
     const data = await response.json();
+
     if (data.error) {
-      return Response.json({
-        error: `Gemini error: ${data.error.message}`
-      }, { status: 500 });
+      return Response.json({ error: "OpenRouter error: " + data.error.message }, { status: 500 });
     }
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    const raw = data?.choices?.[0]?.message?.content || "";
     const clean = raw.replace(/```json|```/g, "").trim();
     const analysis = JSON.parse(clean);
     return Response.json({ analysis });
